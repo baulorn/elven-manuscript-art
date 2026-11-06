@@ -68,3 +68,5 @@ jobs:
           git add Enia/City/Logo.png Enia/City/Button_NewGame_Hover.png Enia/City/Button_Settings.png Enia/City/Button_Authors.png Enia/City/Button_Exit.png
           git commit -m "Split main menu artwork into separate assets"
           git push
+
+# Trigger run after workflow registration.
