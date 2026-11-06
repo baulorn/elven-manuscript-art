@@ -1,0 +1,70 @@
+name: Split menu artwork into assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/split-menu-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Crop original menu artwork
+        run: |
+          python -m pip install --quiet Pillow
+          python - <<'PY'
+          from PIL import Image, ImageChops
+          from pathlib import Path
+
+          source = Path("Enia/City/MenuStyle.jpeg.jpg")
+          image = Image.open(source).convert("RGB")
+
+          # Each region isolates one original element. Nothing is redrawn.
+          regions = {
+              "Logo.png": (180, 0, 1350, 430),
+              "Button_NewGame_Hover.png": (500, 425, 1050, 530),
+              "Button_Settings.png": (500, 520, 1050, 615),
+              "Button_Authors.png": (500, 600, 1050, 690),
+              "Button_Exit.png": (500, 675, 1050, 780),
+          }
+
+          for filename, region in regions.items():
+              crop = image.crop(region)
+              # Trim the crop to the visible artwork, ignoring JPEG noise
+              # in the black background, and retain a small safety margin.
+              diff = ImageChops.difference(crop, Image.new("RGB", crop.size, (0, 0, 0)))
+              mask = diff.convert("L").point(lambda value: 255 if value > 24 else 0)
+              bounds = mask.getbbox()
+              if bounds is None:
+                  raise RuntimeError(f"No visible artwork detected for {filename}")
+              left, top, right, bottom = bounds
+              margin = 10
+              left = max(0, left - margin)
+              top = max(0, top - margin)
+              right = min(crop.width, right + margin)
+              bottom = min(crop.height, bottom + margin)
+              asset = crop.crop((left, top, right, bottom))
+              destination = source.parent / filename
+              asset.save(destination, format="PNG", optimize=True)
+              print(f"Created {destination} ({asset.width}x{asset.height})")
+          PY
+
+      - name: Commit separated assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Enia/City/Logo.png Enia/City/Button_NewGame_Hover.png Enia/City/Button_Settings.png Enia/City/Button_Authors.png Enia/City/Button_Exit.png
+          git commit -m "Split main menu artwork into separate assets"
+          git push
